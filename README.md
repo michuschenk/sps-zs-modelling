@@ -1,1 +1,1 @@
-# sps_zs_modelling
+# sps-zs-modelling

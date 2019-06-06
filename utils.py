@@ -253,7 +253,6 @@ def plot_training_evolution(history):
         y=['acc', 'val_acc'], ax=axs[1], color=["r", "b"])
     axs[0].set(ylabel="Loss")
     axs[0].set_yscale("log")
-    axs[0].set_ylim(bottom=0)
     axs[1].set(xlabel="Epoch", ylabel="Accuracy")
     axs[0].legend(["Training", "Validation"], bbox_to_anchor=(1., 1.05),
                   loc='upper left')
@@ -268,7 +267,6 @@ def plot_training_evolution(history):
     plt.setp(axs[0].get_xticklabels(), visible=False)
     plt.subplots_adjust(left=0.14, bottom=0.12, top=0.89, right=0.76)
     plt.suptitle('Training evolution', fontsize=15)
-    plt.show()
 
 
 def plot_individual_blms(data, title):

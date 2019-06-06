@@ -42,7 +42,7 @@ group_duplicates = False
 
 # Place to save code, plots, etc., for reproducibility
 # Change output_dir to avoid overwriting
-output_dir = '001/'
+output_dir = 'output/001/'
 Path(output_dir).mkdir(parents=True, exist_ok=True)
 copy2('main.py', output_dir + 'main.py.state')
 copy2('utils.py', output_dir + 'utils.py.state')
@@ -79,6 +79,7 @@ if plot_training_data:
                                  str(t_start).split('T')[0])
         plt.savefig(output_dir + 'Training_data_set{:d}_individBLMs.pdf'
                     .format(i))
+        plt.show()
 
 
 # *****************************
@@ -149,6 +150,7 @@ training_history = loss_model.fit(
 training_history = pd.DataFrame(data=training_history.history)
 utl.plot_training_evolution(training_history)
 plt.savefig(output_dir + 'training_history.pdf')
+plt.show()
 loss_model.save(output_dir + 'NN_model')
 
 # ********************************
@@ -215,3 +217,4 @@ plt.show()
 # Perform sanity tests: fake scans for all anodes
 utl.orthogonal_feature_scans(loss_model, scaler_in, scaler_out)
 plt.savefig(output_dir + 'FeatureScans_individBLMs.pdf')
+plt.show()
