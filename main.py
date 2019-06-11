@@ -42,7 +42,7 @@ group_duplicates = False
 
 # Place to save code, plots, etc., for reproducibility
 # Change output_dir to avoid overwriting
-output_dir = 'output/001/'
+output_dir = 'output/002/'
 Path(output_dir).mkdir(parents=True, exist_ok=True)
 copy2('main.py', output_dir + 'main.py.state')
 copy2('utils.py', output_dir + 'utils.py.state')
@@ -54,13 +54,13 @@ copy2('utils.py', output_dir + 'utils.py.state')
 # TODO: may need a lot more cleaning / pre-processing
 train_data_source = {
     'filepath': './timber_data/',
-    'filenames': ['TIMBER_DATA_011118_PowellScans.xls'],
+    'filenames': ['TIMBER_DATA_011118_1300-1600.xls'],
     'start_times': ['2018-11-01 13:18:00.000'],
     'end_times': ['2018-11-01 15:38:00.000']
 }
 
 train_data = utl.load_data(train_data_source)
-train_data = utl.filter_blm_outliers(train_data, threshold=5e-15)
+# train_data = utl.filter_blm_outliers(train_data, threshold=0e-15)
 
 if plot_training_data:
     # Plot every dataset (i.e. from different days) separately
@@ -85,7 +85,9 @@ if plot_training_data:
 # *****************************
 # (2) Prepare data for training
 # TODO: Use sklearn pipelines
-x_train, y_train = utl.separate_features_targets(data=train_data)
+x_train, y_train, features, targets = (
+    utl.separate_features_targets(data=train_data))
+
 if group_duplicates:
     x_train, y_train = utl.group_duplicates(x_train, y_train,
                                             abs_diff=0.001)
@@ -101,6 +103,7 @@ y_train = scaler_out.fit_transform(y_train)
 # Save scalers to reimport when reusing model
 jbl.dump(scaler_in, output_dir + 'scaler_in.save')
 jbl.dump(scaler_out, output_dir + 'scaler_out.save')
+
 
 # **************************************
 # (3) Define neural network architecture
@@ -153,19 +156,22 @@ plt.savefig(output_dir + 'training_history.pdf')
 plt.show()
 loss_model.save(output_dir + 'NN_model')
 
+
 # ********************************
 # (4) Make predictions on test set
 test_data_source = {
     'filepath': './timber_data/',
-    'filenames': ['TIMBER_DATA_270318_ManualScans.xls'],
+    'filenames': ['TIMBER_DATA_270318_1745-280318_0130.xls'],
     'start_times': ['2018-03-27 19:00:00.000'],
     'end_times': ['2018-03-28 01:30:00.000']
 }
 test_data = utl.load_data(test_data_source)
-test_data = utl.filter_blm_outliers(test_data, threshold=5e-15)
-test_data = utl.add_total_loss(test_data)
+# test_data = utl.filter_blm_outliers(test_data, threshold=0e-15)
 
-x_test, y_test = utl.separate_features_targets(data=test_data)
+x_test, y_test, features, targets = (
+    utl.separate_features_targets(data=test_data))
+test_data = utl.add_total_loss(test_data, targets)
+
 
 # ***************
 # (4a) Total loss
@@ -218,3 +224,4 @@ plt.show()
 utl.orthogonal_feature_scans(loss_model, scaler_in, scaler_out)
 plt.savefig(output_dir + 'FeatureScans_individBLMs.pdf')
 plt.show()
+

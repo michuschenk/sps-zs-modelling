@@ -36,17 +36,25 @@ def load_data(data_source):
 def separate_features_targets(data):
     """ Define features and targets: remove corresponding columns from
     data frame and return separated features (x) and targets (y). """
-    drop_cols_features = list(data.filter(like='LOSS').columns)
-    drop_cols_features.append('Timestamp (UTC_TIME)')
-    drop_cols_features.append('ZS1.LSS2.ANODE:UP_PPM')
+    features = ['ZS1.LSS2.ANODE:DO_PPM', 'ZS1.LSS2.ANODE:UP_PPM',
+                'ZS2.LSS2.ANODE:DO_PPM', 'ZS2.LSS2.ANODE:UP_PPM',
+                'ZS3.LSS2.ANODE:DO_PPM', 'ZS3.LSS2.ANODE:UP_PPM',
+                'ZS4.LSS2.ANODE:DO_PPM', 'ZS4.LSS2.ANODE:UP_PPM',
+                'ZS5.LSS2.ANODE:DO_PPM', 'ZS5.LSS2.ANODE:UP_PPM']  #,
+                # 'ZS.LSS2.GIRDER:DO_PPM']
 
-    drop_cols_targets = list(data.filter(like='ANODE').columns)
-    drop_cols_targets.append('Timestamp (UTC_TIME)')
+    targets = ['SPS.BLM.21636.ZS1:LOSS_CYCLE_NORM',
+               'SPS.BLM.21652.ZS2:LOSS_CYCLE_NORM',
+               'SPS.BLM.21658.ZS3:LOSS_CYCLE_NORM',
+               'SPS.BLM.21674.ZS4:LOSS_CYCLE_NORM',
+               'SPS.BLM.21680.ZS5:LOSS_CYCLE_NORM']  #,
+               # 'SPS.BLM.21694.TCE:LOSS_CYCLE_NORM',
+               # 'SPS.BLM.21772.TPST:LOSS_CYCLE_NORM']
 
-    x = data.drop(columns=drop_cols_features)
-    y = data.drop(columns=drop_cols_targets)
+    x = data[features]
+    y = data[targets]
 
-    return x, y
+    return x, y, features, targets
 
 
 def orthogonal_feature_scans(loss_model, scaler_in, scaler_out):
@@ -114,11 +122,13 @@ def filter_blm_outliers(train_data, threshold=5e-15):
     return train_data
 
 
-def add_total_loss(test_data):
+def add_total_loss(test_data, targets):
     """ Add new column to data frame with total loss of ZS1 ... ZS5
     BLMs. """
+    # test_data['TOTAL_LOSS_NORM'] = (
+    #     test_data.filter(like='LOSS_CYCLE_NORM').sum(axis=1))
     test_data['TOTAL_LOSS_NORM'] = (
-        test_data.filter(like='LOSS_CYCLE_NORM').sum(axis=1))
+        test_data[targets].sum(axis=1))
     test_data = test_data.reset_index(drop=True)
     return test_data
 
@@ -259,8 +269,6 @@ def plot_training_evolution(history):
 
     for ax in axs:
         ax.set_xlim(0, history.shape[0])
-        # ax.xaxis.set_major_locator(plt.MaxNLocator(5))
-        # ax.yaxis.set_major_locator(plt.MaxNLocator(5))
     axs[1].ticklabel_format(style='sci', axis='y', scilimits=(0, 0),
                             useMathText=True)
 
@@ -271,7 +279,7 @@ def plot_training_evolution(history):
 
 def plot_individual_blms(data, title):
     """ Plot all anodes in same plot alongside individual BLMs. """
-    axs = plt.subplots(6, 1, figsize=(9, 15), sharex=True)
+    axs = plt.subplots(4, 1, figsize=(9, 11), sharex=True)
     fig = axs[0]
     axs = axs[1].flatten()
 
@@ -284,19 +292,67 @@ def plot_individual_blms(data, title):
                   y='ZS{:d}.LSS2.ANODE:UP_PPM'.format(i),
                   legend=None, ax=axs[0], lw=2, alpha=0.8,
                   label='ZS{:d}: UP'.format(i))
+    axs[0].set_ylabel('ZS position\n(mm)')
     axs[0].legend(bbox_to_anchor=(1., 1.05), loc='upper left')
 
-    for i, ax in enumerate(axs[1:]):
-        col_to_plot = (
-            data.filter(like='ZS{:d}:LOSS_CYCLE_NORM'.format(i + 1))
-                .columns[0])
-        data.plot(x='Timestamp (UTC_TIME)', y=col_to_plot, ax=ax, lw=2,
-                  c='darkred', label='Ground truth', legend=None)
+    # Girder
+    data.plot(x='Timestamp (UTC_TIME)',
+              y='ZS.LSS2.GIRDER:DO_PPM',
+              legend=None, ax=axs[1], lw=2, alpha=0.8,
+              label='Girder DO')
+    data.plot(x='Timestamp (UTC_TIME)',
+              y='ZS.LSS2.GIRDER:UP_PPM',
+              legend=None, ax=axs[1], lw=2, alpha=0.8,
+              label='Girder UP')
+    axs[1].set_ylabel('Girder position\n(mm)')
+    axs[1].legend(bbox_to_anchor=(1., -0.05), loc='lower left')
 
-        ax.set_ylabel('ZS{:d} BLM\n(Gy/charge)'.format(i + 1))
-        ax.set_ylim(0, 4e-14)
-        ax.ticklabel_format(style='sci', axis='y', scilimits=(0, 0),
+    # ZS BLMs
+    for i in range(1, 6):
+        col_to_plot = (
+            data.filter(like='ZS{:d}:LOSS_CYCLE_NORM'.format(i))
+                .columns[0])
+        data.plot(x='Timestamp (UTC_TIME)', y=col_to_plot, ax=axs[2],
+                  lw=2, label='ZS{:d}'.format(i),
+                  legend=None)
+    axs[2].legend(bbox_to_anchor=(1., -0.05), loc='lower left')
+    axs[2].set_ylabel('Norm. BLM\n(Gy/charge)')
+    axs[2].set_ylim(0, 4e-14)
+    axs[2].ticklabel_format(style='sci', axis='y', scilimits=(0, 0),
                             useMathText=True)
+
+    # Other BLMs
+    data.plot(x='Timestamp (UTC_TIME)',
+              y='SPS.BLM.21694.TCE:LOSS_CYCLE_NORM',
+              ax=axs[3],
+              lw=2, label='TCE',
+              legend=None)
+    data.plot(x='Timestamp (UTC_TIME)',
+              y='SPS.BLM.21772.TPST:LOSS_CYCLE_NORM',
+              ax=axs[3],
+              lw=2, label='TPST',
+              legend=None)
+    data.plot(x='Timestamp (UTC_TIME)',
+              y='SPS.BLM.21775.MST1:LOSS_CYCLE_NORM',
+              ax=axs[3],
+              lw=2, label='21775 MST1',
+              legend=None)
+    data.plot(x='Timestamp (UTC_TIME)',
+              y='SPS.BLM.21776.MST1:LOSS_CYCLE_NORM',
+              ax=axs[3],
+              lw=2, label='21776 MST1',
+              legend=None)
+    data.plot(x='Timestamp (UTC_TIME)',
+              y='SPS.BLM.21792.MST3:LOSS_CYCLE_NORM',
+              ax=axs[3],
+              lw=2, label='MST3',
+              legend=None)
+    axs[3].legend(bbox_to_anchor=(1., -0.05), loc='lower left')
+    axs[3].set_ylabel('Norm. BLM\n(Gy/charge)')
+    axs[3].set_ylim(0, 4e-14)
+    axs[3].ticklabel_format(style='sci', axis='y', scilimits=(0, 0),
+                            useMathText=True)
+
     plt.subplots_adjust(bottom=0.1, left=0.12, top=0.92, right=0.79,
                         hspace=0.23)
     plt.suptitle(title, fontsize=15)
