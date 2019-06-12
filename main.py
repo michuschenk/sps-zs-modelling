@@ -60,7 +60,11 @@ train_data_source = {
 }
 
 train_data = utl.load_data(train_data_source)
-# train_data = utl.filter_blm_outliers(train_data, threshold=0e-15)
+train_data = utl.filter_blm_outliers(train_data, threshold=5e-15)
+
+x_train, y_train, features, targets = (
+    utl.separate_features_targets(data=train_data))
+train_data = utl.add_total_loss(train_data, targets)
 
 if plot_training_data:
     # Plot every dataset (i.e. from different days) separately
@@ -85,9 +89,6 @@ if plot_training_data:
 # *****************************
 # (2) Prepare data for training
 # TODO: Use sklearn pipelines
-x_train, y_train, features, targets = (
-    utl.separate_features_targets(data=train_data))
-
 if group_duplicates:
     x_train, y_train = utl.group_duplicates(x_train, y_train,
                                             abs_diff=0.001)
@@ -162,11 +163,11 @@ loss_model.save(output_dir + 'NN_model')
 test_data_source = {
     'filepath': './timber_data/',
     'filenames': ['TIMBER_DATA_270318_1745-280318_0130.xls'],
-    'start_times': ['2018-03-27 19:00:00.000'],
+    'start_times': ['2018-03-27 19:20:00.000'],
     'end_times': ['2018-03-28 01:30:00.000']
 }
 test_data = utl.load_data(test_data_source)
-# test_data = utl.filter_blm_outliers(test_data, threshold=0e-15)
+test_data = utl.filter_blm_outliers(test_data, threshold=5e-15)
 
 x_test, y_test, features, targets = (
     utl.separate_features_targets(data=test_data))
@@ -193,6 +194,8 @@ axs[-1].legend(loc='upper left', bbox_to_anchor=(1., 1.05))
 plt.savefig(output_dir + 'TestData_withPrediction.pdf')
 plt.show()
 
+
+"""
 # ********************
 # (4b) Individual BLMs
 # Reload test set
@@ -224,4 +227,4 @@ plt.show()
 utl.orthogonal_feature_scans(loss_model, scaler_in, scaler_out)
 plt.savefig(output_dir + 'FeatureScans_individBLMs.pdf')
 plt.show()
-
+"""

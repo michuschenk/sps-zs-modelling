@@ -36,7 +36,7 @@ def load_data(data_source):
 def separate_features_targets(data):
     """ Define features and targets: remove corresponding columns from
     data frame and return separated features (x) and targets (y). """
-    features = ['ZS1.LSS2.ANODE:DO_PPM', 'ZS1.LSS2.ANODE:UP_PPM',
+    features = ['ZS1.LSS2.ANODE:DO_PPM',  # 'ZS1.LSS2.ANODE:UP_PPM',
                 'ZS2.LSS2.ANODE:DO_PPM', 'ZS2.LSS2.ANODE:UP_PPM',
                 'ZS3.LSS2.ANODE:DO_PPM', 'ZS3.LSS2.ANODE:UP_PPM',
                 'ZS4.LSS2.ANODE:DO_PPM', 'ZS4.LSS2.ANODE:UP_PPM',
@@ -113,18 +113,21 @@ def orthogonal_feature_scans(loss_model, scaler_in, scaler_out):
 
 def filter_blm_outliers(train_data, threshold=5e-15):
     """ Clean up unreasonable BLM values: when plotting raw data,
-    observed some low-loss spikes (~ 1e-15) for all BLMs at same time --
-    considered unphysical, hence remove these samples.
+    observed some low-loss spikes (~ 1e-15) for all *ZS* BLMs at same
+    time -- considered unphysical, hence remove these samples.
     """
-    for col in train_data.filter(like='LOSS_CYCLE_NORM'):
+    for i in range(1, 6):
+        col = (train_data
+               .filter(like='ZS{:d}:LOSS_CYCLE_NORM'.format(i))
+               .columns[0])
         train_data = train_data[train_data[col] > threshold]
     train_data = train_data.reset_index(drop=True)
     return train_data
 
 
 def add_total_loss(test_data, targets):
-    """ Add new column to data frame with total loss of ZS1 ... ZS5
-    BLMs. """
+    """ Add new column to data frame with total loss of BLMs specified
+    in 'targets'. """
     # test_data['TOTAL_LOSS_NORM'] = (
     #     test_data.filter(like='LOSS_CYCLE_NORM').sum(axis=1))
     test_data['TOTAL_LOSS_NORM'] = (
@@ -232,9 +235,9 @@ def plot_data(data, title=''):
         ax.set_ylim(-2, 2)
 
     # Total loss
-    data['TOTAL_LOSS_NORM'] = (data
-                               .filter(like='LOSS_CYCLE_NORM')
-                               .sum(axis=1))
+    # data['TOTAL_LOSS_NORM'] = (data
+    #                            .filter(like='LOSS_CYCLE_NORM')
+    #                            .sum(axis=1))
     data.plot(x='Timestamp (UTC_TIME)',
               y='TOTAL_LOSS_NORM', ax=axs[-1], c='darkred',
               label='Ground\ntruth', legend=None)
@@ -243,7 +246,7 @@ def plot_data(data, title=''):
                              useMathText=True)
     axs[-1].set_ylabel('Total norm. loss\n(Gy/charge)')
     axs[-1].set_ylim(0, 1.5e-13)
-    data.drop(columns=['TOTAL_LOSS_NORM'])
+    # data.drop(columns=['TOTAL_LOSS_NORM'])
     plt.subplots_adjust(bottom=0.1, left=0.12, top=0.92, right=0.81,
                         hspace=0.23)
     plt.suptitle(title, fontsize=15)
