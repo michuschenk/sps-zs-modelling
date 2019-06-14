@@ -30,7 +30,7 @@ nn_topologies = {
     '2HL_wDO': {'n_nodes_1': 40, 'n_nodes_2': 20, 'dropout': True}
 }
 training_params = {
-    'early_stopping': False, 'batch_size': 10, 'n_epochs': 1200,
+    'early_stopping': False, 'batch_size': 10, 'n_epochs': 1200,   # 1200,
     'learning_rate': 5e-4
 }
 
@@ -47,6 +47,21 @@ Path(output_dir).mkdir(parents=True, exist_ok=True)
 copy2('main.py', output_dir + 'main.py.state')
 copy2('utils.py', output_dir + 'utils.py.state')
 
+features = ['ZS1.LSS2.ANODE:DO_PPM',  # 'ZS1.LSS2.ANODE:UP_PPM',
+            'ZS2.LSS2.ANODE:DO_PPM', 'ZS2.LSS2.ANODE:UP_PPM',
+            'ZS3.LSS2.ANODE:DO_PPM', 'ZS3.LSS2.ANODE:UP_PPM',
+            'ZS4.LSS2.ANODE:DO_PPM', 'ZS4.LSS2.ANODE:UP_PPM',
+            'ZS5.LSS2.ANODE:DO_PPM', 'ZS5.LSS2.ANODE:UP_PPM']
+            # 'ZS.LSS2.GIRDER:DO_PPM']
+
+targets = ['SPS.BLM.21636.ZS1:LOSS_CYCLE_NORM',
+           'SPS.BLM.21652.ZS2:LOSS_CYCLE_NORM',
+           'SPS.BLM.21658.ZS3:LOSS_CYCLE_NORM',
+           'SPS.BLM.21674.ZS4:LOSS_CYCLE_NORM',
+           'SPS.BLM.21680.ZS5:LOSS_CYCLE_NORM',
+           'SPS.BLM.21694.TCE:LOSS_CYCLE_NORM',
+           'SPS.BLM.21772.TPST:LOSS_CYCLE_NORM']
+
 
 # ********************
 # (1) Load TIMBER data
@@ -60,11 +75,9 @@ train_data_source = {
 }
 
 train_data = utl.load_data(train_data_source)
-train_data = utl.filter_blm_outliers(train_data, threshold=5e-15)
+train_data = utl.filter_zs_blm_outliers(train_data, threshold=5e-15)
 
-x_train, y_train, features, targets = (
-    utl.separate_features_targets(data=train_data))
-train_data = utl.add_total_loss(train_data, targets)
+x_train, y_train = train_data[features], train_data[targets]
 
 if plot_training_data:
     # Plot every dataset (i.e. from different days) separately
@@ -74,24 +87,26 @@ if plot_training_data:
         mask_time = ((train_data['Timestamp (UTC_TIME)'] >= t_start) &
                      (train_data['Timestamp (UTC_TIME)'] <= t_end))
         sub_data = train_data[mask_time]
+        sub_data = utl.add_total_loss(sub_data, targets)
         utl.plot_data(data=sub_data, title='Training data\n' +
                                            str(t_start).split('T')[0])
         plt.savefig(output_dir + 'Training_data_set{:d}.pdf'.format(i))
 
         utl.plot_individual_blms(
-            data=sub_data, title='Training data (indiv. BLMs)\n' +
-                                 str(t_start).split('T')[0])
+            data=sub_data,
+            title='Training data (indiv. BLMs)\n' +
+                  str(t_start).split('T')[0])
+
         plt.savefig(output_dir + 'Training_data_set{:d}_individBLMs.pdf'
                     .format(i))
         plt.show()
-
 
 # *****************************
 # (2) Prepare data for training
 # TODO: Use sklearn pipelines
 if group_duplicates:
-    x_train, y_train = utl.group_duplicates(x_train, y_train,
-                                            abs_diff=0.001)
+    x_train, y_train = utl.group_duplicates(
+        x_train, y_train, abs_diff=0.001)
 
 # Shuffle data and apply scaling to in- *and* outputs
 x_train, y_train = shuffle(x_train, y_train, random_state=0)
@@ -167,15 +182,12 @@ test_data_source = {
     'end_times': ['2018-03-28 01:30:00.000']
 }
 test_data = utl.load_data(test_data_source)
-test_data = utl.filter_blm_outliers(test_data, threshold=5e-15)
-
-x_test, y_test, features, targets = (
-    utl.separate_features_targets(data=test_data))
-test_data = utl.add_total_loss(test_data, targets)
-
+test_data = utl.filter_zs_blm_outliers(test_data, threshold=5e-15)
+x_test, y_test = test_data[features], test_data[targets]
 
 # ***************
 # (4a) Total loss
+test_data = utl.add_total_loss(test_data, targets)
 t_start = np.datetime64(test_data_source['start_times'][0])
 _, axs = utl.plot_data(
     test_data, title='Test data\n' + str(t_start).split('T')[0])
@@ -195,32 +207,34 @@ plt.savefig(output_dir + 'TestData_withPrediction.pdf')
 plt.show()
 
 
-"""
 # ********************
 # (4b) Individual BLMs
 # Reload test set
 test_data = utl.load_data(test_data_source)
-test_data = utl.filter_blm_outliers(test_data, threshold=5e-15)
-test_data = utl.add_total_loss(test_data)
+test_data = utl.filter_zs_blm_outliers(test_data, threshold=5e-15)
+test_data = utl.add_total_loss(test_data, targets)
+x_test, y_test = test_data[features], test_data[targets]
 
-_, axs = utl.plot_individual_blms(
-    data=test_data, title='Test data (indiv. BLMs)\n' +
-                          str(t_start).split('T')[0])
-
-# Add predictions on top
-x_test, y_test = utl.separate_features_targets(data=test_data)
+# Add predictions
 x_test = scaler_in.transform(x_test)
 pred_test = loss_model.predict(x_test)
 pred_test = scaler_out.inverse_transform(pred_test)
+cols_pred = [i + '_PRED' for i in targets]
+pred_test = pd.DataFrame(data=pred_test, columns=cols_pred)
 
-for i, ax in enumerate(axs[1:]):
-    ax.plot(test_data['Timestamp (UTC_TIME)'], pred_test[:, i],
-            c='dodgerblue', label='Model\nprediction')
-    if i == 1:
-        ax.legend(loc='upper left', bbox_to_anchor=(1., 1.05))
+test_data = pd.concat([test_data, pred_test], axis=1)
+plot_targets = np.array(targets).take([0, 2, 4, 5, 6])
+_, axs = utl.plot_individual_blms_predictions(
+    data=test_data,
+    title='Test data (indiv. BLMs)\n' + str(t_start).split('T')[0],
+    plot_features=features,
+    plot_targets=plot_targets)
+
 plt.savefig(output_dir + 'TestData_withPrediction_individBLMs.pdf')
 plt.show()
 
+
+"""
 # *********************
 # (4c) Orthogonal scans
 # Perform sanity tests: fake scans for all anodes
