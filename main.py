@@ -26,9 +26,10 @@ sns.set_style('white')
 # (0) Basic config.
 # Some network configurations that perform reasonably well
 nn_topologies = {
-    '1HL_noDO': {'n_nodes_1': 7, 'n_nodes_2': 0, 'dropout': False},
+    # '1HL_noDO': {'n_nodes_1': 7, 'n_nodes_2': 0, 'dropout': False},
     '2HL_wDO': {'n_nodes_1': 40, 'n_nodes_2': 20, 'dropout': True},
-    '2HL_wDO_small': {'n_nodes_1': 20, 'n_nodes_2': 10, 'dropout': True}
+    '2HL_wDO_small': {'n_nodes_1': 20, 'n_nodes_2': 10, 'dropout': True},
+    '1HL_noDO': {'n_nodes_1': 40, 'n_nodes_2': 0, 'dropout': False}
 }
 # training_params = {
 #     'early_stopping': False, 'batch_size': 10, 'n_epochs': 1200,   # 1200,
@@ -36,18 +37,19 @@ nn_topologies = {
 # }
 training_params = {
     'early_stopping': True, 'batch_size': 10, 'n_epochs': 600,   # 1200,
-    'learning_rate': 8e-4
+    'learning_rate': 5e-4
 }
 
 config = nn_topologies['2HL_wDO']
 config.update(training_params)
 
-plot_training_data = True
+plot_training_data = False
 group_duplicates = False
 
 # Place to save code, plots, etc., for reproducibility
 # Change output_dir to avoid overwriting
-output_dir = 'output/004/'
+output_dir = 'output/007_{:s}_{:d}l1_{:d}l2/'.format(
+    '2HL_wDO', config['n_nodes_1'], config['n_nodes_2'])
 Path(output_dir).mkdir(parents=True, exist_ok=True)
 copy2('main.py', output_dir + 'main.py.state')
 copy2('utils.py', output_dir + 'utils.py.state')
@@ -57,8 +59,9 @@ features = ['ZS1.LSS2.ANODE:DO_PPM',  # 'ZS1.LSS2.ANODE:UP_PPM',
             'ZS3.LSS2.ANODE:DO_PPM', 'ZS3.LSS2.ANODE:UP_PPM',
             'ZS4.LSS2.ANODE:DO_PPM', 'ZS4.LSS2.ANODE:UP_PPM',
             'ZS5.LSS2.ANODE:DO_PPM', 'ZS5.LSS2.ANODE:UP_PPM',
-            'ZS.LSS2.GIRDER:DO_PPM']
+            'ZS.LSS2.GIRDER:DO_PPM']  # , 'ZS.LSS2.GIRDER:UP_PPM']
 
+train_total_loss = False
 targets = ['SPS.BLM.21636.ZS1:LOSS_CYCLE_NORM',
            'SPS.BLM.21652.ZS2:LOSS_CYCLE_NORM',
            'SPS.BLM.21658.ZS3:LOSS_CYCLE_NORM',
@@ -84,6 +87,12 @@ train_data_source = {
                   # '2018-03-28 01:30:00.000',
                   '2018-04-26 23:00:00.000']
 }
+# train_data_source = {
+#     'filepath': './timber_data/',
+#     'filenames': ['TIMBER_DATA_260418_1730-2300.xls'],
+#     'start_times': ['2018-04-26 17:30:00.000'],
+#     'end_times': ['2018-04-26 23:00:00.000']
+# }
 
 train_data = utl.load_data(train_data_source)
 train_data = utl.filter_zs_blm_outliers(train_data, threshold=5e-15)
@@ -125,7 +134,11 @@ x_train, y_train = shuffle(x_train, y_train, random_state=0)
 scaler_in = MinMaxScaler(feature_range=(-0.5, 0.5))
 x_train = scaler_in.fit_transform(x_train)
 scaler_out = MinMaxScaler()
-y_train = scaler_out.fit_transform(y_train)
+if train_total_loss:
+    y_train = np.array(np.sum(y_train, axis=1))
+    y_train = scaler_out.fit_transform(y_train.reshape(-1, 1))
+else:
+    y_train = scaler_out.fit_transform(y_train)
 
 # Save scalers to reimport when reusing model
 jbl.dump(scaler_in, output_dir + 'scaler_in.save')
@@ -171,7 +184,7 @@ if config['early_stopping']:
     callbacks.append(EarlyStopping(patience=30))
 
 training_history = loss_model.fit(
-    x_train, y_train, validation_split=0.15,
+    x_train, y_train, validation_split=0.1,
     epochs=config['n_epochs'],
     callbacks=callbacks,
     batch_size=config['batch_size'])
@@ -237,38 +250,38 @@ plt.savefig(output_dir + 'TestData_withPrediction.pdf')
 plt.show()
 
 
-# ********************
-# (4b) Individual BLMs
-# Reload test set
-test_data = utl.load_data(test_data_source)
-test_data = utl.filter_zs_blm_outliers(test_data, threshold=5e-15)
-test_data = utl.add_total_loss(test_data, targets)
-x_test, y_test = test_data[features], test_data[targets]
+if not train_total_loss:
+    # ********************
+    # (4b) Individual BLMs
+    # Reload test set
+    test_data = utl.load_data(test_data_source)
+    test_data = utl.filter_zs_blm_outliers(test_data, threshold=5e-15)
+    test_data = utl.add_total_loss(test_data, targets)
+    x_test, y_test = test_data[features], test_data[targets]
 
-# Add predictions
-x_test = scaler_in.transform(x_test)
-pred_test = loss_model.predict(x_test)
-pred_test = scaler_out.inverse_transform(pred_test)
-cols_pred = [i + '_PRED' for i in targets]
-pred_test = pd.DataFrame(data=pred_test, columns=cols_pred)
+    # Add predictions
+    x_test = scaler_in.transform(x_test)
+    pred_test = loss_model.predict(x_test)
+    pred_test = scaler_out.inverse_transform(pred_test)
+    cols_pred = [i + '_PRED' for i in targets]
+    pred_test = pd.DataFrame(data=pred_test, columns=cols_pred)
 
-test_data = pd.concat([test_data, pred_test], axis=1)
-plot_targets = np.array(targets).take([0, 1, 2, 3, 4])
-_, axs = utl.plot_individual_blms_predictions(
-    data=test_data,
-    title='Test data (indiv. BLMs)\n' + str(t_start).split('T')[0],
-    plot_features=features,
-    plot_targets=plot_targets)
+    test_data = pd.concat([test_data, pred_test], axis=1)
+    plot_targets = np.array(targets).take([0, 1, 2, 3, 4])
+    _, axs = utl.plot_individual_blms_predictions(
+        data=test_data,
+        title='Test data (indiv. BLMs)\n' + str(t_start).split('T')[0],
+        plot_features=features,
+        plot_targets=plot_targets)
 
-plt.savefig(output_dir + 'TestData_withPrediction_individBLMs.pdf')
-plt.show()
+    plt.savefig(output_dir + 'TestData_withPrediction_individBLMs.pdf')
+    plt.show()
 
-
-"""
 # *********************
 # (4c) Orthogonal scans
-# Perform sanity tests: fake scans for all anodes
-utl.orthogonal_feature_scans(loss_model, scaler_in, scaler_out)
+# Perform sanity checks: fake scans for all anodes
+plot_targets = np.array(targets).take([0, 1, 2, 3, 4])
+utl.orthogonal_feature_scans(
+    loss_model, scaler_in, scaler_out, features, targets, plot_targets)
 plt.savefig(output_dir + 'FeatureScans_individBLMs.pdf')
 plt.show()
-"""

@@ -33,39 +33,57 @@ def load_data(data_source):
     return data
 
 
-def orthogonal_feature_scans(loss_model, scaler_in, scaler_out,
-                             targets, plot_targets):
+def orthogonal_feature_scans(
+        loss_model, scaler_in, scaler_out, features, targets,
+        plot_targets, girder_pos={'DO': 42.8, 'UP': 68.1},
+        fig_axs=None, colors=None, label=None):
     """ Perform fake orthogonal scans for every feature and plot response
     for trained model. Assuming that all features are anode positions
     here. Some hard-coded axis limits , labels, etc.
     At the moment girders are not scanned, should be added ... """
     # TODO: Add girder scan
-    feature_map = {'ZS1_DO': 0, 'ZS2_DO': 1, 'ZS2_UP': 2, 'ZS3_DO': 3,
-                   'ZS3_UP': 4, 'ZS4_DO': 5, 'ZS4_UP': 6, 'ZS5_DO': 7,
-                   'ZS5_UP': 8}
+    anodes_to_plot = ['ZS1 DO', 'ZS2 UP', 'ZS2 DO', 'ZS3 UP', 'ZS3 DO',
+                      'ZS4 UP', 'ZS4 DO', 'ZS5 UP', 'ZS5 DO']
 
-    axs = plt.subplots(len(plot_targets) + 1, 9, figsize=(16, 15),
-                       sharex=True)
-    fig = axs[0]
-    axs = axs[1]
+    if fig_axs is None:
+        fig_axs = plt.subplots(
+            len(plot_targets) + 1, len(anodes_to_plot), figsize=(17, 15),
+            sharex=True)
+    if colors is None:
+        colors = ('dodgerblue', 'forestgreen')
+    fig = fig_axs[0]
+    axs = fig_axs[1]
 
-    for j, k in enumerate(feature_map.keys()):
-        ind_ZS = feature_map[k]
+    n_features = len(features)
+    for j, k in enumerate(anodes_to_plot):
+        nb, di = k.split(' ')
+        ind_ZS = [
+            idx for idx, feat in enumerate(features)
+            if '{:s}.LSS2.ANODE:{:s}_PPM'.format(nb, di) in feat][0]
 
         n_samples = 50
-        n_features = len(feature_map.keys())
         x_test = np.zeros((n_samples, n_features))
         x_test[:, ind_ZS] = np.linspace(-2, 2, n_samples)
+        # If girders in feature list, need to set them to non-zero
+        # values (girder DO: ~42.8 mm, girder UP: ~68.1 mm). Otherwise
+        # won't get sensible response for anode scans.
+        for pos in ['DO', 'UP']:
+            if 'ZS.LSS2.GIRDER:{:s}_PPM'.format(pos) in features:
+                ind_gird = [idx for idx, feat in enumerate(features)
+                            if 'GIRDER:{:s}'.format(pos) in feat][0]
+                x_test[:, ind_gird] = girder_pos[pos]
+
         y_pred = loss_model.predict(scaler_in.transform(x_test))
         y_pred = scaler_out.inverse_transform(y_pred)
         y_pred = pd.DataFrame(data=y_pred, columns=targets)
 
         for i, v in enumerate(plot_targets):
             ax = axs[i, j]
-            ax.plot(x_test[:, ind_ZS], y_pred[v], c='dodgerblue')
+            ax.plot(x_test[:, ind_ZS], y_pred[v], c=colors[0],
+                    label=label)
             if j == 0:
                 ax.set_ylabel('{:s}\n(Gy/charge)'.format(
-                    v.split('LOSS')[0]))
+                    v.split(':LOSS')[0].split('SPS.')[-1]))
                 ax.ticklabel_format(
                     style='sci', axis='y', scilimits=(0, 0),
                     useMathText=True)
@@ -75,8 +93,8 @@ def orthogonal_feature_scans(loss_model, scaler_in, scaler_out,
                 axs[i, j].yaxis.get_offset_text().set_visible(False)
             ax.set_ylim(0., 1e-13)
         axs[-1, j].plot(x_test[:, ind_ZS], y_pred[targets].sum(axis=1),
-                        c='forestgreen')
-        axs[-1, j].set_ylim(0., 4e-13)
+                        c=colors[1], label=label)
+        axs[-1, j].set_ylim(0., 2e-13)
         if j == 0:
             axs[-1, j].ticklabel_format(
                 style='sci', axis='y', scilimits=(0, 0),
@@ -88,9 +106,9 @@ def orthogonal_feature_scans(loss_model, scaler_in, scaler_out,
             axs[-1, j].yaxis.get_offset_text().set_visible(False)
         axs[-1, j].set_xlabel('{:s} (mm)'.format(k))
         plt.suptitle('Orthogonal feature scans', fontsize=15)
-
     plt.subplots_adjust(bottom=0.1, left=0.08, top=0.92, right=0.97,
                         hspace=0.23)
+    return fig_axs
 
 
 def filter_zs_blm_outliers(train_data, threshold=5e-15):
