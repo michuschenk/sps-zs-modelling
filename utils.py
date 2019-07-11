@@ -3,36 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-def date_parser(x):
-    """ Helper function for date / time parsing of input files. May no
-    longer be required. """
-    return pd.datetime.strptime(x, '%Y-%m-%d %H:%M:%S.%f')
-
-
-def load_data(data_source):
-    """ Read data from .xls files into pandas data frame. Time range can
-     be adjusted in data_source dict. """
-    data = pd.DataFrame()
-    filepath = data_source['filepath']
-    filenames = data_source['filenames']
-    start_times = data_source['start_times']
-    end_times = data_source['end_times']
-    for i, f in enumerate(filenames):
-        data_tmp = pd.read_excel(
-            filepath + f, parse_dates=['Timestamp (UTC_TIME)'],
-            date_parser=date_parser)
-
-        # Mask times where useful data is
-        t_start = np.datetime64(start_times[i])
-        t_end = np.datetime64(end_times[i])
-        mask_time = ((data_tmp['Timestamp (UTC_TIME)'] >= t_start) &
-                     (data_tmp['Timestamp (UTC_TIME)'] <= t_end))
-        print('{:s}, using {:d} samples'.format(f, np.sum(mask_time)))
-        data_tmp = data_tmp[mask_time]
-        data = data.append(data_tmp)
-    return data
-
-
 def orthogonal_feature_scans(
         loss_model, scaler_in, scaler_out, features, targets,
         plot_targets, girder_pos={'DO': 42.8, 'UP': 68.1},

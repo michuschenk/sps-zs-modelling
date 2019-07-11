@@ -16,6 +16,7 @@ from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.utils import shuffle
 
 import utils as utl
+import data_io as dio
 
 import seaborn as sns
 sns.set(context='talk', font_scale=0.75)
@@ -73,40 +74,45 @@ targets = ['SPS.BLM.21636.ZS1:LOSS_CYCLE_NORM',
 
 # ********************
 # (1) Load TIMBER data
-train_sets = {
-    'train_combi_1': {
-        'filepath': './timber_data/',
-        'filenames': ['TIMBER_DATA_011118_1300-1600.xls',
-                      'TIMBER_DATA_260418_1730-2300.xls'],
-        'start_times': ['2018-11-01 13:18:00.000',
-                        '2018-04-26 17:30:00.000'],
-        'end_times': ['2018-11-01 15:38:00.000',
-                      '2018-04-26 23:00:00.000'],
-        'comment': 'general purpose training set, with a bit of girder DO'
-    },
-    'train_combi_2': {
-        'filepath': './timber_data/',
-        'filenames': ['TIMBER_DATA_011118_1300-1600.xls',
-                      'TIMBER_DATA_050418_2110-2315.xls'],
-        'start_times': ['2018-11-01 13:18:00.000',
-                        '2018-04-05 21:10:00.000'],
-        'end_times': ['2018-11-01 15:38:00.000',
-                      '2018-04-05 23:15:00.000'],
-        'comment': 'includes extensive girder scan'
-    }
-}
+# train_sets = {
+#     THIS ONE WORKS PRETTY WELL IN GENERAL (INCL GIRDER)
+#     'train_combi_1': {
+#         'filepath': './timber_data/',
+#         'filenames': ['TIMBER_DATA_011118_1300-1600.xls',
+#                       'TIMBER_DATA_260418_1730-2300.xls'],
+#         'start_times': ['2018-11-01 13:18:00.000',
+#                         '2018-04-26 17:30:00.000'],
+#         'end_times': ['2018-11-01 15:38:00.000',
+#                       '2018-04-26 23:00:00.000'],
+#         'comment': 'general purpose training set, with a bit of girder DO'
+#     },
+#     THIS ONE IS TO CHECK HOW THE GIRDER RESPONSE CHANGES WHEN INCL.
+#     DATA FROM 05.04. (EXTENSIVE GIRDER SCANS).
+#     'train_combi_2': {
+#         'filepath': './timber_data/',
+#         'filenames': ['TIMBER_DATA_011118_1300-1600.xls',
+#                       'TIMBER_DATA_050418_2110-2315.xls'],
+#         'start_times': ['2018-11-01 13:18:00.000',
+#                         '2018-04-05 21:10:00.000'],
+#         'end_times': ['2018-11-01 15:38:00.000',
+#                       '2018-04-05 23:15:00.000'],
+#         'comment': 'includes extensive girder scan'
+#     }
+# }
 
-train_data_source = train_sets['train_combi_2']
-train_data = utl.load_data(train_data_source)
+train_cfg_1 = dio.Dataconfig(config=dio.config_dict['260418'])
+train_cfg_2 = dio.Dataconfig(config=dio.config_dict['011118'])
+train_cfgs = train_cfg_1 + train_cfg_2
+train_data = dio.load_data(train_cfgs)
 train_data = utl.filter_zs_blm_outliers(train_data, threshold=5e-15)
 
 x_train, y_train = train_data[features], train_data[targets]
 
 if plot_training_data:
     # Plot every dataset (i.e. from different days) separately
-    for i in range(len(train_data_source['filenames'])):
-        t_start = np.datetime64(train_data_source['start_times'][i])
-        t_end = np.datetime64(train_data_source['end_times'][i])
+    for i in range(len(train_cfgs.config['filenames'])):
+        t_start = np.datetime64(train_cfgs.config['start_times'][i])
+        t_end = np.datetime64(train_cfgs.config['end_times'][i])
         mask_time = ((train_data['Timestamp (UTC_TIME)'] >= t_start) &
                      (train_data['Timestamp (UTC_TIME)'] <= t_end))
         sub_data = train_data[mask_time]
@@ -202,42 +208,42 @@ loss_model.save(output_dir + 'NN_model')
 
 # ********************************
 # (4) Make predictions on test set
-test_sets = {
-    '050418': {
-        'filepath': './timber_data/',
-        'filenames': ['TIMBER_DATA_050418_2110-2315.xls'],
-        'start_times': ['2018-04-05 21:10:00.000'],
-        'end_times': ['2018-04-05 23:15:00.000']
-    },
-    '300318': {
-        'filepath': './timber_data/',
-        'filenames': ['TIMBER_DATA_300318_1500-2130.xls'],
-        'start_times': ['2018-03-30 15:00:00.000'],
-        'end_times': ['2018-03-30 21:30:00.000']
-    },
-    '220918': {
-        'filepath': './timber_data/',
-        'filenames': ['TIMBER_DATA_220918_1235-1305_GIRDER.xls'],
-        'start_times': ['2018-09-22 12:35:00.000'],
-        'end_times': ['2018-09-22 13:05:00.000']
-    },
-    '270318': {
-        'filepath': './timber_data/',
-        'filenames': ['TIMBER_DATA_270318_1745-280318_0130.xls'],
-        'start_times': ['2018-03-27 19:20:00.000'],
-        'end_times': ['2018-03-28 01:30:00.000'],
-    }
-}
+# test_sets = {
+#     '050418': {
+#         'filepath': './timber_data/',
+#         'filenames': ['TIMBER_DATA_050418_2110-2315.xls'],
+#         'start_times': ['2018-04-05 21:10:00.000'],
+#         'end_times': ['2018-04-05 23:15:00.000']
+#     },
+#     '300318': {
+#         'filepath': './timber_data/',
+#         'filenames': ['TIMBER_DATA_300318_1500-2130.xls'],
+#         'start_times': ['2018-03-30 15:00:00.000'],
+#         'end_times': ['2018-03-30 21:30:00.000']
+#     },
+#     '220918': {
+#         'filepath': './timber_data/',
+#         'filenames': ['TIMBER_DATA_220918_1235-1305_GIRDER.xls'],
+#         'start_times': ['2018-09-22 12:35:00.000'],
+#         'end_times': ['2018-09-22 13:05:00.000']
+#     },
+#     '270318': {
+#         'filepath': './timber_data/',
+#         'filenames': ['TIMBER_DATA_270318_1745-280318_0130.xls'],
+#         'start_times': ['2018-03-27 19:20:00.000'],
+#         'end_times': ['2018-03-28 01:30:00.000'],
+#     }
+# }
 
-test_data_source = test_sets['270318']
-test_data = utl.load_data(test_data_source)
+test_cfg = dio.Dataconfig(config=dio.config_dict['270318'])
+test_data = dio.load_data(test_cfg)
 test_data = utl.filter_zs_blm_outliers(test_data, threshold=5e-15)
 x_test, y_test = test_data[features], test_data[targets]
 
 # ***************
 # (4a) Total loss
 test_data = utl.add_total_loss(test_data, targets)
-t_start = np.datetime64(test_data_source['start_times'][0])
+t_start = np.datetime64(test_cfg.config['start_times'][0])
 _, axs = utl.plot_data(
     test_data, title='Test data\n' + str(t_start).split('T')[0])
 
@@ -260,7 +266,7 @@ if not train_total_loss:
     # ********************
     # (4b) Individual BLMs
     # Reload test set
-    test_data = utl.load_data(test_data_source)
+    test_data = dio.load_data(test_cfg)
     test_data = utl.filter_zs_blm_outliers(test_data, threshold=5e-15)
     test_data = utl.add_total_loss(test_data, targets)
     x_test, y_test = test_data[features], test_data[targets]
