@@ -27,7 +27,7 @@ sns.set_style('white')
 # Some network configurations that perform reasonably well
 nn_topologies = {
     # '1HL_noDO': {'n_nodes_1': 7, 'n_nodes_2': 0, 'dropout': False},
-    '2HL_wDO': {'n_nodes_1': 40, 'n_nodes_2': 20, 'dropout': True},
+    '2HL_wDO': {'n_nodes_1': 100, 'n_nodes_2': 50, 'dropout': True},
     '2HL_wDO_small': {'n_nodes_1': 20, 'n_nodes_2': 10, 'dropout': True},
     '1HL_noDO': {'n_nodes_1': 40, 'n_nodes_2': 0, 'dropout': False}
 }
@@ -73,27 +73,30 @@ targets = ['SPS.BLM.21636.ZS1:LOSS_CYCLE_NORM',
 
 # ********************
 # (1) Load TIMBER data
-# For now: anode positions, loss for each ZS BLM
-# TODO: may need a lot more cleaning / pre-processing
-train_data_source = {
-    'filepath': './timber_data/',
-    'filenames': ['TIMBER_DATA_011118_1300-1600.xls',
-                  # 'TIMBER_DATA_270318_1745-280318_0130.xls',
-                  'TIMBER_DATA_260418_1730-2300.xls'],
-    'start_times': ['2018-11-01 13:18:00.000',
-                    # '2018-03-27 19:20:00.000',
-                    '2018-04-26 17:30:00.000'],
-    'end_times': ['2018-11-01 15:38:00.000',
-                  # '2018-03-28 01:30:00.000',
-                  '2018-04-26 23:00:00.000']
+train_sets = {
+    'train_combi_1': {
+        'filepath': './timber_data/',
+        'filenames': ['TIMBER_DATA_011118_1300-1600.xls',
+                      'TIMBER_DATA_260418_1730-2300.xls'],
+        'start_times': ['2018-11-01 13:18:00.000',
+                        '2018-04-26 17:30:00.000'],
+        'end_times': ['2018-11-01 15:38:00.000',
+                      '2018-04-26 23:00:00.000'],
+        'comment': 'general purpose training set, with a bit of girder DO'
+    },
+    'train_combi_2': {
+        'filepath': './timber_data/',
+        'filenames': ['TIMBER_DATA_011118_1300-1600.xls',
+                      'TIMBER_DATA_050418_2110-2315.xls'],
+        'start_times': ['2018-11-01 13:18:00.000',
+                        '2018-04-05 21:10:00.000'],
+        'end_times': ['2018-11-01 15:38:00.000',
+                      '2018-04-05 23:15:00.000'],
+        'comment': 'includes extensive girder scan'
+    }
 }
-# train_data_source = {
-#     'filepath': './timber_data/',
-#     'filenames': ['TIMBER_DATA_260418_1730-2300.xls'],
-#     'start_times': ['2018-04-26 17:30:00.000'],
-#     'end_times': ['2018-04-26 23:00:00.000']
-# }
 
+train_data_source = train_sets['train_combi_2']
 train_data = utl.load_data(train_data_source)
 train_data = utl.filter_zs_blm_outliers(train_data, threshold=5e-15)
 
@@ -184,7 +187,7 @@ if config['early_stopping']:
     callbacks.append(EarlyStopping(patience=30))
 
 training_history = loss_model.fit(
-    x_train, y_train, validation_split=0.1,
+    x_train, y_train, validation_split=0.15,
     epochs=config['n_epochs'],
     callbacks=callbacks,
     batch_size=config['batch_size'])
@@ -199,31 +202,34 @@ loss_model.save(output_dir + 'NN_model')
 
 # ********************************
 # (4) Make predictions on test set
-# test_data_source = {
-#     'filepath': './timber_data/',
-#     'filenames': ['TIMBER_DATA_050418_2110-2315.xls'],
-#     'start_times': ['2018-04-05 21:10:00.000'],
-#     'end_times': ['2018-04-05 23:15:00.000']
-# }
-# test_data_source = {
-#     'filepath': './timber_data/',
-#     'filenames': ['TIMBER_DATA_300318_1500-2130.xls'],
-#     'start_times': ['2018-03-30 15:00:00.000'],
-#     'end_times': ['2018-03-30 21:30:00.000']
-# }
-# test_data_source = {
-#     'filepath': './timber_data/',
-#     'filenames': ['TIMBER_DATA_220918_1235-1305_GIRDER.xls'],
-#     'start_times': ['2018-09-22 12:35:00.000'],
-#     'end_times': ['2018-09-22 13:05:00.000']
-# }
-test_data_source = {
-    'filepath': './timber_data/',
-    'filenames': ['TIMBER_DATA_270318_1745-280318_0130.xls'],
-    'start_times': ['2018-03-27 19:20:00.000'],
-    'end_times': ['2018-03-28 01:30:00.000']
+test_sets = {
+    '050418': {
+        'filepath': './timber_data/',
+        'filenames': ['TIMBER_DATA_050418_2110-2315.xls'],
+        'start_times': ['2018-04-05 21:10:00.000'],
+        'end_times': ['2018-04-05 23:15:00.000']
+    },
+    '300318': {
+        'filepath': './timber_data/',
+        'filenames': ['TIMBER_DATA_300318_1500-2130.xls'],
+        'start_times': ['2018-03-30 15:00:00.000'],
+        'end_times': ['2018-03-30 21:30:00.000']
+    },
+    '220918': {
+        'filepath': './timber_data/',
+        'filenames': ['TIMBER_DATA_220918_1235-1305_GIRDER.xls'],
+        'start_times': ['2018-09-22 12:35:00.000'],
+        'end_times': ['2018-09-22 13:05:00.000']
+    },
+    '270318': {
+        'filepath': './timber_data/',
+        'filenames': ['TIMBER_DATA_270318_1745-280318_0130.xls'],
+        'start_times': ['2018-03-27 19:20:00.000'],
+        'end_times': ['2018-03-28 01:30:00.000'],
+    }
 }
 
+test_data_source = test_sets['270318']
 test_data = utl.load_data(test_data_source)
 test_data = utl.filter_zs_blm_outliers(test_data, threshold=5e-15)
 x_test, y_test = test_data[features], test_data[targets]
