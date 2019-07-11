@@ -33,15 +33,19 @@ def load_data(data_source):
     return data
 
 
-def orthogonal_feature_scans(loss_model, scaler_in, scaler_out):
+def orthogonal_feature_scans(loss_model, scaler_in, scaler_out,
+                             targets, plot_targets):
     """ Perform fake orthogonal scans for every feature and plot response
     for trained model. Assuming that all features are anode positions
-    here. Some hard-coded axis limits , labels, etc. """
+    here. Some hard-coded axis limits , labels, etc.
+    At the moment girders are not scanned, should be added ... """
+    # TODO: Add girder scan
     feature_map = {'ZS1_DO': 0, 'ZS2_DO': 1, 'ZS2_UP': 2, 'ZS3_DO': 3,
                    'ZS3_UP': 4, 'ZS4_DO': 5, 'ZS4_UP': 6, 'ZS5_DO': 7,
                    'ZS5_UP': 8}
 
-    axs = plt.subplots(6, 9, figsize=(16, 15), sharex=True)
+    axs = plt.subplots(len(plot_targets) + 1, 9, figsize=(16, 15),
+                       sharex=True)
     fig = axs[0]
     axs = axs[1]
 
@@ -54,12 +58,14 @@ def orthogonal_feature_scans(loss_model, scaler_in, scaler_out):
         x_test[:, ind_ZS] = np.linspace(-2, 2, n_samples)
         y_pred = loss_model.predict(scaler_in.transform(x_test))
         y_pred = scaler_out.inverse_transform(y_pred)
+        y_pred = pd.DataFrame(data=y_pred, columns=targets)
 
-        for i in range(0, 5):
+        for i, v in enumerate(plot_targets):
             ax = axs[i, j]
-            ax.plot(x_test[:, ind_ZS], y_pred[:, i], c='dodgerblue')
+            ax.plot(x_test[:, ind_ZS], y_pred[v], c='dodgerblue')
             if j == 0:
-                ax.set_ylabel('ZS{:d} BLM\n(Gy/charge)'.format(i + 1))
+                ax.set_ylabel('{:s}\n(Gy/charge)'.format(
+                    v.split('LOSS')[0]))
                 ax.ticklabel_format(
                     style='sci', axis='y', scilimits=(0, 0),
                     useMathText=True)
@@ -67,10 +73,10 @@ def orthogonal_feature_scans(loss_model, scaler_in, scaler_out):
                 plt.setp(axs[i, j].get_xticklabels(), visible=False)
                 plt.setp(axs[i, j].get_yticklabels(), visible=False)
                 axs[i, j].yaxis.get_offset_text().set_visible(False)
-            ax.set_ylim(0., 6e-14)
-        axs[-1, j].plot(x_test[:, ind_ZS], np.sum(y_pred, axis=1),
+            ax.set_ylim(0., 1e-13)
+        axs[-1, j].plot(x_test[:, ind_ZS], y_pred[targets].sum(axis=1),
                         c='forestgreen')
-        axs[-1, j].set_ylim(0., 2e-13)
+        axs[-1, j].set_ylim(0., 4e-13)
         if j == 0:
             axs[-1, j].ticklabel_format(
                 style='sci', axis='y', scilimits=(0, 0),
@@ -188,27 +194,35 @@ def group_duplicates(x_train, y_train, abs_diff=0.001):
 
 def plot_data(data, title=''):
     """ Plot all anodes in separate plots alongside total loss. """
-    axs = plt.subplots(6, 1, figsize=(9, 15), sharex=True)
+    axs = plt.subplots(3, 1, figsize=(9, 7), sharex=True)
     fig = axs[0]
     axs = axs[1].flatten()
-    for i, ax in enumerate(axs[:-1]):
-        alpha = 1.
-        if i == 0:
-            alpha = 0.3
-        data.plot(x='Timestamp (UTC_TIME)',
-                  y='ZS{:d}.LSS2.ANODE:UP_PPM'.format(i+1), ax=ax,
-                  c='mediumblue', alpha=alpha,
-                  label='UP', legend=None)
-        data.plot(x='Timestamp (UTC_TIME)',
-                  y='ZS{:d}.LSS2.ANODE:DO_PPM'.format(i+1), ax=ax,
-                  c='forestgreen',
-                  label='DO', legend=None)
 
-        if i == 1:
-            ax.legend(loc='upper left', bbox_to_anchor=(1., 2.3))
+    for i in range(1, 6):
+        var = 'ZS{:d}.LSS2.ANODE:DO_PPM'.format(i)
+        data.plot(x='Timestamp (UTC_TIME)',
+                  y=var,
+                  legend=None, ax=axs[0], lw=2, alpha=0.8,
+                  label='ZS{:d}: DO'.format(i))
+        var = 'ZS{:d}.LSS2.ANODE:UP_PPM'.format(i)
+        data.plot(x='Timestamp (UTC_TIME)',
+                  y=var,
+                  legend=None, ax=axs[0], lw=2, alpha=0.8,
+                  label='ZS{:d}: UP'.format(i))
+    axs[0].set_ylabel('ZS position\n(mm)')
+    axs[0].set_ylim(-2, 2)
+    axs[0].legend(bbox_to_anchor=(1., 1.05), loc='upper left', ncol=2)
 
-        ax.set_ylabel('ZS{:d} anode\npos. (mm)'.format(i+1))
-        ax.set_ylim(-2, 2)
+    # Girder
+    girders = ['ZS.LSS2.GIRDER:DO_PPM', 'ZS.LSS2.GIRDER:UP_PPM']
+    for v in girders:
+        data.plot(x='Timestamp (UTC_TIME)',
+                  y=v,
+                  legend=None, ax=axs[1], lw=2, alpha=0.8,
+                  label=v.split('LSS2.')[-1]
+                         .split('_')[0].replace(':', ' '))
+    axs[1].set_ylabel('Girder position\n(mm)')
+    axs[1].legend(bbox_to_anchor=(1., 1.05), loc='upper left')
 
     # Total loss
     # data['TOTAL_LOSS_NORM'] = (data
@@ -221,9 +235,9 @@ def plot_data(data, title=''):
     axs[-1].ticklabel_format(style='sci', axis='y', scilimits=(0, 0),
                              useMathText=True)
     axs[-1].set_ylabel('Total norm. loss\n(Gy/charge)')
-    axs[-1].set_ylim(0, 3e-13)
+    # axs[-1].set_ylim(0, 5e-13)
     # data.drop(columns=['TOTAL_LOSS_NORM'])
-    plt.subplots_adjust(bottom=0.1, left=0.12, top=0.92, right=0.81,
+    plt.subplots_adjust(bottom=0.145, left=0.14, top=0.92, right=0.65,
                         hspace=0.23)
     plt.suptitle(title, fontsize=15)
 
@@ -302,7 +316,7 @@ def plot_individual_blms(data, title):
     axs[2].set_ylabel('Norm. losses\n(Gy/charge)')
     axs[2].ticklabel_format(
         style='sci', axis='y', scilimits=(0, 0), useMathText=True)
-    axs[2].set_ylim(0, 6e-14)
+    axs[2].set_ylim(0, 1e-13)
     axs[2].legend(bbox_to_anchor=(1., 1.05), loc='upper left')
 
     # Plot other BLMs
@@ -318,7 +332,7 @@ def plot_individual_blms(data, title):
     axs[3].set_ylabel('Norm. losses\n(Gy/charge)')
     axs[3].ticklabel_format(
         style='sci', axis='y', scilimits=(0, 0), useMathText=True)
-    axs[3].set_ylim(0, 6e-14)
+    axs[3].set_ylim(0, 1e-13)
     axs[3].legend(bbox_to_anchor=(1., 1.05), loc='upper left')
 
     # Plot other BLMs, 2
@@ -335,7 +349,7 @@ def plot_individual_blms(data, title):
     axs[4].set_ylabel('Norm. losses\n(Gy/charge)')
     axs[4].ticklabel_format(
         style='sci', axis='y', scilimits=(0, 0), useMathText=True)
-    axs[4].set_ylim(0, 6e-14)
+    axs[4].set_ylim(0, 1e-13)
     axs[4].legend(bbox_to_anchor=(1., 1.05), loc='upper left')
 
     plt.subplots_adjust(bottom=0.1, left=0.13, top=0.92, right=0.66,
@@ -369,7 +383,8 @@ def plot_individual_blms_predictions(
                       label='ZS{:d}: UP'.format(i))
     axs[0].set_ylabel('ZS position\n(mm)')
     axs[0].set_ylim(-2, 2)
-    axs[0].legend(bbox_to_anchor=(1., 1.05), loc='upper left')
+    axs[0].legend(bbox_to_anchor=(1., 1.05), loc='upper left',
+                  ncol=2)
 
     # Girder
     girders_used = False
@@ -384,7 +399,7 @@ def plot_individual_blms_predictions(
             girders_used = True
     if girders_used:
         axs[1].set_ylabel('Girder position\n(mm)')
-        axs[1].legend(bbox_to_anchor=(1., 1.05), loc='upper left')
+        axs[1].legend(bbox_to_anchor=(1., 0.75), loc='upper left')
 
     # Plot all targets that are requested
     for j, v in enumerate(plot_targets):
@@ -400,13 +415,13 @@ def plot_individual_blms_predictions(
                   c='dodgerblue')
         axs[2+j].set_ylabel(v.split('SPS.BLM.')[-1].split(':')[0] +
                             '\n(Gy/charge)')
-        axs[2+j].set_ylim(0, 6e-14)
+        axs[2+j].set_ylim(0, 1e-13)
         axs[2+j].ticklabel_format(
             style='sci', axis='y', scilimits=(0, 0), useMathText=True)
 
     axs[2].legend(bbox_to_anchor=(1., 1.05), loc='upper left')
 
-    plt.subplots_adjust(bottom=0.1, left=0.13, top=0.92, right=0.79,
+    plt.subplots_adjust(bottom=0.1, left=0.13, top=0.92, right=0.65,
                         hspace=0.23)
     plt.suptitle(title, fontsize=15)
 

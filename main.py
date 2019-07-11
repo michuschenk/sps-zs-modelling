@@ -27,14 +27,19 @@ sns.set_style('white')
 # Some network configurations that perform reasonably well
 nn_topologies = {
     '1HL_noDO': {'n_nodes_1': 7, 'n_nodes_2': 0, 'dropout': False},
-    '2HL_wDO': {'n_nodes_1': 40, 'n_nodes_2': 20, 'dropout': True}
+    '2HL_wDO': {'n_nodes_1': 40, 'n_nodes_2': 20, 'dropout': True},
+    '2HL_wDO_small': {'n_nodes_1': 20, 'n_nodes_2': 10, 'dropout': True}
 }
+# training_params = {
+#     'early_stopping': False, 'batch_size': 10, 'n_epochs': 1200,   # 1200,
+#     'learning_rate': 5e-4
+# }
 training_params = {
-    'early_stopping': False, 'batch_size': 10, 'n_epochs': 1200,   # 1200,
-    'learning_rate': 5e-4
+    'early_stopping': True, 'batch_size': 10, 'n_epochs': 600,   # 1200,
+    'learning_rate': 8e-4
 }
 
-config = nn_topologies['1HL_noDO']
+config = nn_topologies['2HL_wDO']
 config.update(training_params)
 
 plot_training_data = True
@@ -42,7 +47,7 @@ group_duplicates = False
 
 # Place to save code, plots, etc., for reproducibility
 # Change output_dir to avoid overwriting
-output_dir = 'output/002/'
+output_dir = 'output/004/'
 Path(output_dir).mkdir(parents=True, exist_ok=True)
 copy2('main.py', output_dir + 'main.py.state')
 copy2('utils.py', output_dir + 'utils.py.state')
@@ -51,16 +56,16 @@ features = ['ZS1.LSS2.ANODE:DO_PPM',  # 'ZS1.LSS2.ANODE:UP_PPM',
             'ZS2.LSS2.ANODE:DO_PPM', 'ZS2.LSS2.ANODE:UP_PPM',
             'ZS3.LSS2.ANODE:DO_PPM', 'ZS3.LSS2.ANODE:UP_PPM',
             'ZS4.LSS2.ANODE:DO_PPM', 'ZS4.LSS2.ANODE:UP_PPM',
-            'ZS5.LSS2.ANODE:DO_PPM', 'ZS5.LSS2.ANODE:UP_PPM']
-            # 'ZS.LSS2.GIRDER:DO_PPM']
+            'ZS5.LSS2.ANODE:DO_PPM', 'ZS5.LSS2.ANODE:UP_PPM',
+            'ZS.LSS2.GIRDER:DO_PPM']
 
 targets = ['SPS.BLM.21636.ZS1:LOSS_CYCLE_NORM',
            'SPS.BLM.21652.ZS2:LOSS_CYCLE_NORM',
            'SPS.BLM.21658.ZS3:LOSS_CYCLE_NORM',
            'SPS.BLM.21674.ZS4:LOSS_CYCLE_NORM',
-           'SPS.BLM.21680.ZS5:LOSS_CYCLE_NORM',
-           'SPS.BLM.21694.TCE:LOSS_CYCLE_NORM',
-           'SPS.BLM.21772.TPST:LOSS_CYCLE_NORM']
+           'SPS.BLM.21680.ZS5:LOSS_CYCLE_NORM']   #,
+           # 'SPS.BLM.21694.TCE:LOSS_CYCLE_NORM',
+           # 'SPS.BLM.21772.TPST:LOSS_CYCLE_NORM']
 
 
 # ********************
@@ -69,9 +74,15 @@ targets = ['SPS.BLM.21636.ZS1:LOSS_CYCLE_NORM',
 # TODO: may need a lot more cleaning / pre-processing
 train_data_source = {
     'filepath': './timber_data/',
-    'filenames': ['TIMBER_DATA_011118_1300-1600.xls'],
-    'start_times': ['2018-11-01 13:18:00.000'],
-    'end_times': ['2018-11-01 15:38:00.000']
+    'filenames': ['TIMBER_DATA_011118_1300-1600.xls',
+                  # 'TIMBER_DATA_270318_1745-280318_0130.xls',
+                  'TIMBER_DATA_260418_1730-2300.xls'],
+    'start_times': ['2018-11-01 13:18:00.000',
+                    # '2018-03-27 19:20:00.000',
+                    '2018-04-26 17:30:00.000'],
+    'end_times': ['2018-11-01 15:38:00.000',
+                  # '2018-03-28 01:30:00.000',
+                  '2018-04-26 23:00:00.000']
 }
 
 train_data = utl.load_data(train_data_source)
@@ -87,10 +98,10 @@ if plot_training_data:
         mask_time = ((train_data['Timestamp (UTC_TIME)'] >= t_start) &
                      (train_data['Timestamp (UTC_TIME)'] <= t_end))
         sub_data = train_data[mask_time]
-        sub_data = utl.add_total_loss(sub_data, targets)
-        utl.plot_data(data=sub_data, title='Training data\n' +
-                                           str(t_start).split('T')[0])
-        plt.savefig(output_dir + 'Training_data_set{:d}.pdf'.format(i))
+        # sub_data = utl.add_total_loss(sub_data, targets)
+        # utl.plot_data(data=sub_data, title='Training data\n' +
+        #                                    str(t_start).split('T')[0])
+        # plt.savefig(output_dir + 'Training_data_set{:d}.pdf'.format(i))
 
         utl.plot_individual_blms(
             data=sub_data,
@@ -175,12 +186,31 @@ loss_model.save(output_dir + 'NN_model')
 
 # ********************************
 # (4) Make predictions on test set
+# test_data_source = {
+#     'filepath': './timber_data/',
+#     'filenames': ['TIMBER_DATA_050418_2110-2315.xls'],
+#     'start_times': ['2018-04-05 21:10:00.000'],
+#     'end_times': ['2018-04-05 23:15:00.000']
+# }
+# test_data_source = {
+#     'filepath': './timber_data/',
+#     'filenames': ['TIMBER_DATA_300318_1500-2130.xls'],
+#     'start_times': ['2018-03-30 15:00:00.000'],
+#     'end_times': ['2018-03-30 21:30:00.000']
+# }
+# test_data_source = {
+#     'filepath': './timber_data/',
+#     'filenames': ['TIMBER_DATA_220918_1235-1305_GIRDER.xls'],
+#     'start_times': ['2018-09-22 12:35:00.000'],
+#     'end_times': ['2018-09-22 13:05:00.000']
+# }
 test_data_source = {
     'filepath': './timber_data/',
     'filenames': ['TIMBER_DATA_270318_1745-280318_0130.xls'],
     'start_times': ['2018-03-27 19:20:00.000'],
     'end_times': ['2018-03-28 01:30:00.000']
 }
+
 test_data = utl.load_data(test_data_source)
 test_data = utl.filter_zs_blm_outliers(test_data, threshold=5e-15)
 x_test, y_test = test_data[features], test_data[targets]
@@ -201,7 +231,7 @@ y_test_tot = np.array(np.sum(y_test, axis=1))
 axs[-1].plot(test_data['Timestamp (UTC_TIME)'],
              pred_test_tot, c='dodgerblue',
              label='Model\nprediction')
-axs[-1].set_ylim(0.5e-13, 1.4e-13)
+axs[-1].set_ylim(0, 4e-13)
 axs[-1].legend(loc='upper left', bbox_to_anchor=(1., 1.05))
 plt.savefig(output_dir + 'TestData_withPrediction.pdf')
 plt.show()
@@ -223,7 +253,7 @@ cols_pred = [i + '_PRED' for i in targets]
 pred_test = pd.DataFrame(data=pred_test, columns=cols_pred)
 
 test_data = pd.concat([test_data, pred_test], axis=1)
-plot_targets = np.array(targets).take([0, 2, 4, 5, 6])
+plot_targets = np.array(targets).take([0, 1, 2, 3, 4])
 _, axs = utl.plot_individual_blms_predictions(
     data=test_data,
     title='Test data (indiv. BLMs)\n' + str(t_start).split('T')[0],
