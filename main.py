@@ -100,7 +100,8 @@ targets = ['SPS.BLM.21636.ZS1:LOSS_CYCLE_NORM',
 #     }
 # }
 
-train_cfg_1 = dio.Dataconfig(config=dio.config_dict['260418'])
+# train_cfg_1 = dio.Dataconfig(config=dio.config_dict['260418'])
+train_cfg_1 = dio.Dataconfig(config=dio.config_dict['050418'])
 train_cfg_2 = dio.Dataconfig(config=dio.config_dict['011118'])
 train_cfgs = train_cfg_1 + train_cfg_2
 train_data = dio.load_data(train_cfgs)
@@ -164,7 +165,8 @@ loss_model = Sequential()
 
 # 1st hidden layer
 loss_model.add(Dense(config['n_nodes_1'], input_shape=(n_features,),
-                     kernel_initializer=glorot_normal(seed=0)))
+                     kernel_initializer=glorot_normal(seed=0),
+                     activation='linear'))
 loss_model.add(LeakyReLU(alpha=0.2))
 
 # Dropout layer
@@ -174,12 +176,14 @@ if config['dropout']:
 # 2nd hidden layer
 if config['n_nodes_2']:
     loss_model.add(Dense(config['n_nodes_2'],
-                         kernel_initializer=glorot_normal(seed=2)))
+                         kernel_initializer=glorot_normal(seed=2),
+                         activation='linear'))
     loss_model.add(LeakyReLU(alpha=0.2))
 
 # Output layer
 loss_model.add(
-    Dense(n_targets, kernel_initializer=glorot_normal(seed=2)))
+    Dense(n_targets, kernel_initializer=glorot_normal(seed=2),
+          activation='linear'))
 
 # Optimiser and loss
 adam_opt = Adam(lr=config['learning_rate'], beta_1=0.9, beta_2=0.999,
@@ -236,6 +240,7 @@ loss_model.save(output_dir + 'NN_model')
 # }
 
 test_cfg = dio.Dataconfig(config=dio.config_dict['270318'])
+# test_cfg = dio.Dataconfig(config=dio.config_dict['050418'])
 test_data = dio.load_data(test_cfg)
 test_data = utl.filter_zs_blm_outliers(test_data, threshold=5e-15)
 x_test, y_test = test_data[features], test_data[targets]
