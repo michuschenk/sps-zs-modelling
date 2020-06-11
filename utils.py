@@ -202,7 +202,7 @@ def plot_data(data, title=''):
     axs[0].legend(bbox_to_anchor=(1., 1.05), loc='upper left', ncol=2)
 
     # Girder
-    girders = ['ZS.LSS2.GIRDER:DO_PPM', 'ZS.LSS2.GIRDER:UP_PPM']
+    girders = ['ZS.LSS2.GIRDER:DO_PPM']  # , 'ZS.LSS2.GIRDER:UP_PPM']
     for v in girders:
         data.plot(x='Timestamp (UTC_TIME)',
                   y=v,
@@ -280,7 +280,7 @@ def plot_individual_blms(data, title):
     axs[0].legend(bbox_to_anchor=(1., 1.05), loc='upper left', ncol=2)
 
     # Girder
-    girders = ['ZS.LSS2.GIRDER:DO_PPM', 'ZS.LSS2.GIRDER:UP_PPM']
+    girders = ['ZS.LSS2.GIRDER:DO_PPM']  #, 'ZS.LSS2.GIRDER:UP_PPM']
     for v in girders:
         data.plot(x='Timestamp (UTC_TIME)',
                   y=v,
