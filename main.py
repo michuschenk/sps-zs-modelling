@@ -5,15 +5,20 @@ import numpy as np
 from pathlib import Path
 from shutil import copy2
 import joblib as jbl
+import glob
+import pickle as pkl
 
 from keras.models import Sequential
 from keras.layers import Dense, LeakyReLU, Dropout
 from keras.optimizers import Adam
 from keras.initializers import glorot_normal
 from keras.callbacks import EarlyStopping
+from keras.models import load_model
+import keras.backend as K
 
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.utils import shuffle
+from sklearn.externals import joblib
 
 import utils as utl
 import data_io as dio
@@ -28,9 +33,9 @@ sns.set_style('white')
 # Some network configurations that perform reasonably well
 nn_topologies = {
     # '1HL_noDO': {'n_nodes_1': 7, 'n_nodes_2': 0, 'dropout': False},
-    '2HL_wDO': {'n_nodes_1': 100, 'n_nodes_2': 50, 'dropout': True},
+    '2HL_wDO': {'n_nodes_1': 100, 'n_nodes_2': 100, 'dropout': True},
     '2HL_wDO_small': {'n_nodes_1': 20, 'n_nodes_2': 10, 'dropout': True},
-    '1HL_noDO': {'n_nodes_1': 40, 'n_nodes_2': 0, 'dropout': False}
+    '1HL_noDO': {'n_nodes_1': 15, 'n_nodes_2': 0, 'dropout': False}
 }
 # training_params = {
 #     'early_stopping': False, 'batch_size': 10, 'n_epochs': 1200,   # 1200,
@@ -38,42 +43,65 @@ nn_topologies = {
 # }
 training_params = {
     'early_stopping': True, 'batch_size': 10, 'n_epochs': 600,   # 1200,
-    'learning_rate': 5e-4
+    'learning_rate': 6e-4,
+    # 'train_data': ['050418', '011118'],
+    # 'test_data': '270318',
+    # 'train_data': ['011118', '270318'],
+    # 'test_data': '050418',
+    'train_data': ['011118'],  # , '260418', '050418'],  # , '270318'],  #, '260418'],
+    'test_data': '270318',
+    'features':
+        ['ZS1.LSS2.ANODE:DO_PPM',  # 'ZS1.LSS2.ANODE:UP_PPM',
+         'ZS2.LSS2.ANODE:DO_PPM', 'ZS2.LSS2.ANODE:UP_PPM',
+         'ZS3.LSS2.ANODE:DO_PPM', 'ZS3.LSS2.ANODE:UP_PPM',
+         'ZS4.LSS2.ANODE:DO_PPM', 'ZS4.LSS2.ANODE:UP_PPM',
+         'ZS5.LSS2.ANODE:DO_PPM', 'ZS5.LSS2.ANODE:UP_PPM'],
+         # 'ZS.LSS2.GIRDER:DO_PPM'],  # 'ZS.LSS2.GIRDER:UP_PPM'],
+    'targets':
+        ['SPS.BLM.21636.ZS1:LOSS_CYCLE_NORM',
+         'SPS.BLM.21652.ZS2:LOSS_CYCLE_NORM',
+         'SPS.BLM.21658.ZS3:LOSS_CYCLE_NORM',
+         'SPS.BLM.21674.ZS4:LOSS_CYCLE_NORM',
+         'SPS.BLM.21680.ZS5:LOSS_CYCLE_NORM'],
+         # 'SPS.BLM.21694.TCE:LOSS_CYCLE_NORM',
+         # 'SPS.BLM.21772.TPST:LOSS_CYCLE_NORM']
+    'train_total_loss': False
 }
 
 config = nn_topologies['2HL_wDO']
 config.update(training_params)
 
-plot_training_data = False
+plot_training_data = True
 group_duplicates = False
 
 # Place to save code, plots, etc., for reproducibility
 # Change output_dir to avoid overwriting
-output_dir = 'output/007_{:s}_{:d}l1_{:d}l2/'.format(
-    '2HL_wDO', config['n_nodes_1'], config['n_nodes_2'])
+# Find latest directory and check its config. If it's not the same
+# anymore move on and create new directory.
+latest_output = sorted(glob.glob('output/*/'))[-1]
+dir_number = int(latest_output.split('output/')[-1].split('/')[0].split('_')[0])
+with open(latest_output + '/config.pkl', 'rb') as fid:
+    latest_config = pkl.load(fid)
+
+retrain_NN = False
+if latest_config != config:
+    print('Configuration has changed. Create new output directory and ' +
+          'retrain NN.')
+    retrain_NN = True
+    dir_number += 1
+    output_dir = 'output/{:03d}/'.format(dir_number)
+else:
+    print('Same configuration, no need to retrain NN')
+    output_dir = latest_output
+
 Path(output_dir).mkdir(parents=True, exist_ok=True)
 copy2('main.py', output_dir + 'main.py.state')
 copy2('utils.py', output_dir + 'utils.py.state')
 
-features = ['ZS1.LSS2.ANODE:DO_PPM',  # 'ZS1.LSS2.ANODE:UP_PPM',
-            'ZS2.LSS2.ANODE:DO_PPM', 'ZS2.LSS2.ANODE:UP_PPM',
-            'ZS3.LSS2.ANODE:DO_PPM', 'ZS3.LSS2.ANODE:UP_PPM',
-            'ZS4.LSS2.ANODE:DO_PPM', 'ZS4.LSS2.ANODE:UP_PPM',
-            'ZS5.LSS2.ANODE:DO_PPM', 'ZS5.LSS2.ANODE:UP_PPM',
-            'ZS.LSS2.GIRDER:DO_PPM']  # , 'ZS.LSS2.GIRDER:UP_PPM']
+# Save config for future reference
+with open(output_dir + '/config.pkl', 'wb') as fid:
+    pkl.dump(config, fid)
 
-train_total_loss = False
-targets = ['SPS.BLM.21636.ZS1:LOSS_CYCLE_NORM',
-           'SPS.BLM.21652.ZS2:LOSS_CYCLE_NORM',
-           'SPS.BLM.21658.ZS3:LOSS_CYCLE_NORM',
-           'SPS.BLM.21674.ZS4:LOSS_CYCLE_NORM',
-           'SPS.BLM.21680.ZS5:LOSS_CYCLE_NORM']   #,
-           # 'SPS.BLM.21694.TCE:LOSS_CYCLE_NORM',
-           # 'SPS.BLM.21772.TPST:LOSS_CYCLE_NORM']
-
-
-# ********************
-# (1) Load TIMBER data
 # train_sets = {
 #     THIS ONE WORKS PRETTY WELL IN GENERAL (INCL GIRDER)
 #     'train_combi_1': {
@@ -101,9 +129,19 @@ targets = ['SPS.BLM.21636.ZS1:LOSS_CYCLE_NORM',
 # }
 
 # train_cfg_1 = dio.Dataconfig(config=dio.config_dict['260418'])
-train_cfg_1 = dio.Dataconfig(config=dio.config_dict['050418'])
-train_cfg_2 = dio.Dataconfig(config=dio.config_dict['011118'])
-train_cfgs = train_cfg_1 + train_cfg_2
+
+# ********************
+# (1) Data I/O
+# Define features and targets
+features = config['features']
+targets = config['targets']
+train_total_loss = config['train_total_loss']
+
+# Load training data
+train_cfgs = []
+for td in config['train_data']:
+    train_cfgs.append(dio.Dataconfig(config=dio.config_dict[td]))
+train_cfgs = np.sum(train_cfgs)
 train_data = dio.load_data(train_cfgs)
 train_data = utl.filter_zs_blm_outliers(train_data, threshold=5e-15)
 
@@ -157,7 +195,6 @@ jbl.dump(scaler_out, output_dir + 'scaler_out.save')
 
 # **************************************
 # (3) Define neural network architecture
-# TODO: Try other regressors
 n_features = x_train.shape[1]
 n_targets = y_train.shape[1]
 
@@ -166,24 +203,25 @@ loss_model = Sequential()
 # 1st hidden layer
 loss_model.add(Dense(config['n_nodes_1'], input_shape=(n_features,),
                      kernel_initializer=glorot_normal(seed=0),
-                     activation='linear'))
+                     activation='linear', name='dense1_loss_model'))
 loss_model.add(LeakyReLU(alpha=0.2))
 
 # Dropout layer
 if config['dropout']:
-    loss_model.add(Dropout(rate=0.2, noise_shape=None, seed=None))
+    loss_model.add(Dropout(rate=0.2, noise_shape=None, seed=None,
+                           name='dropout1_loss_model'))
 
 # 2nd hidden layer
 if config['n_nodes_2']:
     loss_model.add(Dense(config['n_nodes_2'],
                          kernel_initializer=glorot_normal(seed=2),
-                         activation='linear'))
+                         activation='linear', name='dense2_loss_model'))
     loss_model.add(LeakyReLU(alpha=0.2))
 
 # Output layer
 loss_model.add(
     Dense(n_targets, kernel_initializer=glorot_normal(seed=2),
-          activation='linear'))
+          activation='linear', name='layerout_loss_model'))
 
 # Optimiser and loss
 adam_opt = Adam(lr=config['learning_rate'], beta_1=0.9, beta_2=0.999,
@@ -194,21 +232,26 @@ loss_model.compile(optimizer=adam_opt, loss='mean_squared_error',
 # Training
 callbacks = []
 if config['early_stopping']:
-    callbacks.append(EarlyStopping(patience=30))
+    callbacks.append(EarlyStopping(patience=50))
 
-training_history = loss_model.fit(
-    x_train, y_train, validation_split=0.15,
-    epochs=config['n_epochs'],
-    callbacks=callbacks,
-    batch_size=config['batch_size'])
+if retrain_NN:
+    training_history = loss_model.fit(
+        x_train, y_train, validation_split=0.12,
+        epochs=config['n_epochs'],
+        callbacks=callbacks,
+        batch_size=config['batch_size'])
 
-# Visualise training evolution
-training_history = pd.DataFrame(data=training_history.history)
-utl.plot_training_evolution(training_history)
-plt.savefig(output_dir + 'training_history.pdf')
-plt.show()
-loss_model.save(output_dir + 'NN_model')
-
+    # Visualise training evolution
+    training_history = pd.DataFrame(data=training_history.history)
+    utl.plot_training_evolution(training_history)
+    plt.savefig(output_dir + 'training_history.pdf')
+    plt.show()
+    loss_model.save(output_dir + 'NN_model')
+else:
+    scaler_in = joblib.load(output_dir + '/scaler_in.save')
+    scaler_out = joblib.load(output_dir + '/scaler_out.save')
+    loss_model = load_model(output_dir + '/NN_model')
+    sess = K.get_session()
 
 # ********************************
 # (4) Make predictions on test set
@@ -239,8 +282,7 @@ loss_model.save(output_dir + 'NN_model')
 #     }
 # }
 
-test_cfg = dio.Dataconfig(config=dio.config_dict['270318'])
-# test_cfg = dio.Dataconfig(config=dio.config_dict['050418'])
+test_cfg = dio.Dataconfig(config=dio.config_dict[config['test_data']])
 test_data = dio.load_data(test_cfg)
 test_data = utl.filter_zs_blm_outliers(test_data, threshold=5e-15)
 x_test, y_test = test_data[features], test_data[targets]
